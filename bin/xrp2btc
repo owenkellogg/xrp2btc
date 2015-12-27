@@ -1,0 +1,49 @@
+#!/usr/bin/env babel-node
+
+var commander = require('commander')
+var http = require('superagent')
+import uuid from 'uuid'
+import {
+    lookupFederationUrl,
+    lookupFederationAddress,
+    getFederationQuote,
+    findRipplePath
+} from '../src'
+
+const ADDRESS = process.env.RIPPLE_ADDRESS
+const SECRET = process.env.RIPPLE_SECRET
+const ISSUER = 'rMwjYedjc7qqtKYVLiAccJSmCwih4LnE2q'
+const BITCOIN_ADDRESS = '1AQxAq9mMbcBXn7L4XaNnwHZwXvuALewYB'
+
+const AMOUNT = 2
+
+lookupFederationUrl('btc2ripple.com').then(function(url) {
+    return lookupFederationAddress(BITCOIN_ADDRESS, url, 'btc2ripple.com')
+})
+.then(function(quoteUrl) {
+    return getFederationQuote(quoteUrl, BITCOIN_ADDRESS, AMOUNT, 'snapswap.us')
+})
+.then(function(quote) {
+
+    findRipplePath(ADDRESS, quote.address, quote.amount, quote.issuer).then(function(payment) {
+
+        payment.destination_tag = String(quote.tag)
+        payment.invoice_id = quote.invoiceId
+
+        console.log('PAYMENT', payment)
+
+        http.post(`http://127.0.0.1:5990/v1/accounts/${ADDRESS}/payments`)
+            .send({
+                client_resource_id: uuid.v4(),
+                payment: payment,
+                secret: SECRET
+            })
+            .end(function(error, response) {
+                console.log(response.body)
+            })
+    })
+})
+.catch(function(error) {
+    console.error('ERROR', error)
+})
+
